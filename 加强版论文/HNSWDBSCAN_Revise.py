@@ -2,144 +2,63 @@ import random
 import numpy as np
 import copy
 import hnswlib
-import pandas as pd
-from collections import Counter
-import matplotlib.pyplot as plt
-import time
-import numpy as np
+from sklearn.metrics import accuracy_score
 from sklearn import datasets
 import datetime
-from sklearn.preprocessing import scale
-from sklearn.decomposition import PCA
-
-from sklearn.metrics import accuracy_score
-
-def graphConstruct(data,lable,M):
+def graphConstruct(data):
     dim = len(data[0])
+    data_lables = range(len(data))
     p = hnswlib.Index(space='l2', dim=dim)
-    p.init_index(max_elements=len(data),  ef_construction=200, M=20)
-    p.add_items(data, lable)
+    p.init_index(max_elements=len(data), ef_construction=200, M=20)
+    p.add_items(data, data_lables)
     p.set_ef(50)
     return p
-def findNeighbor(labels):
+def findNeighbor(labels,data):
 
-
-    innerNeighbor = []  # 一半的半径里的点。
-    outerNeighbor = []  # 一半的半径外的点。
-    neighborPoint = []  # 邻居点
-    reachAblePoint = []  # 三个半径内的邻居点，为了查询外环的核心点。
-
-    center = labels[0]
-    for j in range(1, len(labels)):  # 返回的是距离最近的k个元素，按顺序输出的。
-        dist = np.sqrt(np.sum(np.square(data[center] - data[labels[j]])))
-
-        # 将属于这个点的内核对象，保存起来。认为与核心点是相同类型点
-        if dist <= eps / 2:
-            innerNeighbor.append(labels[j])
-
-
-        # 将外环的点保存起来，扩张的时候。以此为基点向外寻找近邻点
-        if dist > eps / 2 and dist <= eps:
-            outerNeighbor.append(labels[j])
-
-        neighborPoint = innerNeighbor + outerNeighbor
-
-        # 两个半径原则，将三个半径范围内的点加入领域查询。
-        if dist < 3 * eps:
-            reachAblePoint.append(labels[j])
-
-        if dist > 3 * eps:
-            break
-    return innerNeighbor,outerNeighbor,neighborPoint,reachAblePoint
-
-def findReachNeighbor(labels):
-    reachNeighbor=[]
-
-    core = []
     for i in labels:
-        center=i[0]
-        neighbor = []
-        for j in range(1,len(i)):
-            compare_point=i[j]
-            dist = np.sqrt(np.sum(np.square(data[center] - data[compare_point])))
+        centers = data[i[0]]
+        neighbor = i
+        dist_list = []
+        for j in range(1, len(i)):
+            curr = data[i[j]]
+            dist = np.sqrt(np.sum(np.square(centers - curr)))
+            dist_list.append(dist)
 
-            if dist<=eps:
-                neighbor.append(compare_point)
-            if dist>eps:
+            if dist > eps:  # 找到小于半径的截至索引位置
+                neighbor = neighbor[0:j]
                 break
-        if len(neighbor)>min_Pts:
-
-            core.append(center)
-            reachNeighbor=list(set(reachNeighbor+neighbor))
-    return core,reachNeighbor
-
-
-
-
-
-
+    return neighbor
 
 
 
 def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据点的最近邻
+    p=graphConstruct(data)  #构建遍历层图。
 
-    data_lables=range(len(data))
-    p=graphConstruct(data,data_lables,30)
-    core_total=[]                    #核心点集合
-    border=[]
-    neighborCore=[]
+    data_label=list(range(len(data)))
 
-    origDatalabel=list(range(len(data)))
-    while len(origDatalabel)!=0:
-        center=origDatalabel[0]
-        origDatalabel.remove(center)        #删除已经访问邻居的点。
+    core=[]
+    neighbor_list=[]
+    while len(data_label)!=0:
+        center=data_label[0]
 
-        labels, distance = p.knn_query(data[center], k=len(data))  # len(X)
-        labels = labels[0]
+        lable,distant=p.knn_query(data[center],k=len(data))
+        neighbor=findNeighbor(lable, data)
 
-        innerNeighbor, outerNeighbor, neighbor, reachPoint_label = findNeighbor(labels)
+
         if len(neighbor)>=min_Pts:
-            core_total.append(center)
-        neighborCore.append(set(neighbor))
+            core.append(center)
+        neighbor_list.append(set(neighbor))
+        data_label.remove(center)
+    core=set(core)
+    print(neighbor_list)
+    print(core)
+    return neighbor_list,core
 
 
 
 
-        # if len(neighbor)>=min_Pts:         #在该点为核心点的情况下才需要查询其外环邻居
-        #     # 外环点向外扩张，查询其密度可达的邻居点。根据其论文解释，只需要查询三个半径内的点。
-        #
-        #     old_neighbor=neighbor
-        #     reachData = []
-        #     for r in reachPoint_label:
-        #         reachData.append(data[r])
-        #
-        #     #存放这一个簇内的核心点
-        #     core=[]
-        #     core.append(center)
-        #     outerNeighborData = []
-        #     for o in outerNeighbor:
-        #         outerNeighborData.append(data[o])
-        #     # reach_p = graphConstruct(reachData, reachPoint_label, 20)
-        #     if len(innerNeighbor)+1>=min_Pts:
-        #         core=core+innerNeighbor
-        #         #从邻居里面把已经认定为是核心点的点删掉。
-        #         origDatalabel = list(set(origDatalabel) - set(core))
-        #
-        #     for i in range(len(core)):
-        #         core_total.append(core[i])
-        #         neighborCore.append(set(neighbor))
-        #
-        #
-        # if len(neighbor) <min_Pts:  # 边界点筛查，领域内是否有核心点。
-        #     #
-        #     # if len(neighbor)==0:
-        #     #     continue
-        #     neighborCore.append(set(neighbor))
-        #     neighbor.insert(0,center)
-        #     border.append(neighbor)
 
-    core_total=set(core_total)
-    return (neighborCore,core_total,border)
+
 
 
 
@@ -152,8 +71,7 @@ def DBSCAN(X, eps, min_Pts):
 
     cluster = [-1 for _ in range(len(X))]  # 聚类
 
-    neighbor_list,omega_list,border=hnswlibTok(X,eps,min_Pts)
-
+    neighbor_list,omega_list=hnswlibTok(X,eps,min_Pts)
 
 
     while len(omega_list) > 0:
@@ -177,20 +95,6 @@ def DBSCAN(X, eps, min_Pts):
         for i in range(len(Ck)):
             cluster[Cklist[i]] = k
         omega_list = omega_list - Ck
-
-
-    for i in range(len(border)):
-        bor_i=set(border[i])
-        co=list(set(bor_i).intersection(omega_list))
-        if len(co)==0:
-            continue
-        else:
-            core_label=cluster[co[0]]
-
-            bor_center=list(bor_i)[0]
-
-            cluster[bor_center]=core_label
-
     return cluster
 
 
@@ -229,13 +133,8 @@ def presion(y_true, y_pred):
             max_label = max(pred_label, key=pred_label.count)
         for s in i:
             y_ture_lable[s]=max_label
-    print(y_ture_lable)
 
-    print(accuracy_score(y_ture_lable,y_pred))
     return y_ture_lable
-
-
-
 
 
 
