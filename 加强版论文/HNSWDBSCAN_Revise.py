@@ -17,7 +17,7 @@ from sklearn.metrics import accuracy_score
 def graphConstruct(data,lable,M):
     dim = len(data[0])
     p = hnswlib.Index(space='l2', dim=dim)
-    p.init_index(max_elements=len(data), ef_construction=200, M=M)
+    p.init_index(max_elements=len(data),  ef_construction=200, M=20)
     p.add_items(data, lable)
     p.set_ef(50)
     return p
@@ -85,10 +85,6 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
 
     data_lables=range(len(data))
     p=graphConstruct(data,data_lables,30)
-
-
-
-
     core_total=[]                    #核心点集合
     border=[]
     neighborCore=[]
@@ -102,98 +98,90 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
         labels = labels[0]
 
         innerNeighbor, outerNeighbor, neighbor, reachPoint_label = findNeighbor(labels)
-
-
-        if len(neighbor)>=min_Pts:         #在该点为核心点的情况下才需要查询其外环邻居
-            # 外环点向外扩张，查询其密度可达的邻居点。根据其论文解释，只需要查询三个半径内的点。
-
-            old_neighbor=neighbor
-            reachData = []
-            for r in reachPoint_label:
-                reachData.append(data[r])
-
-            #存放这一个簇内的核心点
-            core=[]
-            core.append(center)
-
-            outerNeighborData = []
-            for o in outerNeighbor:
-                outerNeighborData.append(data[o])
-            # reach_p = graphConstruct(reachData, reachPoint_label, 20)
-            if len(innerNeighbor)+1>=min_Pts:
-                core=core+innerNeighbor
-                #从邻居里面把已经认定为是核心点的点删掉。
-                origDatalabel = list(set(origDatalabel) - set(core))
-            core_total.append(set(core))
-            neighborCore.append(neighbor)
-
-
-        if len(neighbor) <min_Pts:  # 边界点筛查，领域内是否有核心点。
-
-            if len(neighbor)==0:
-                continue
-            neighbor.insert(0,center)
-            border.append(neighbor)
+        if len(neighbor)>=min_Pts:
+            core_total.append(center)
+        neighborCore.append(set(neighbor))
 
 
 
+
+        # if len(neighbor)>=min_Pts:         #在该点为核心点的情况下才需要查询其外环邻居
+        #     # 外环点向外扩张，查询其密度可达的邻居点。根据其论文解释，只需要查询三个半径内的点。
+        #
+        #     old_neighbor=neighbor
+        #     reachData = []
+        #     for r in reachPoint_label:
+        #         reachData.append(data[r])
+        #
+        #     #存放这一个簇内的核心点
+        #     core=[]
+        #     core.append(center)
+        #     outerNeighborData = []
+        #     for o in outerNeighbor:
+        #         outerNeighborData.append(data[o])
+        #     # reach_p = graphConstruct(reachData, reachPoint_label, 20)
+        #     if len(innerNeighbor)+1>=min_Pts:
+        #         core=core+innerNeighbor
+        #         #从邻居里面把已经认定为是核心点的点删掉。
+        #         origDatalabel = list(set(origDatalabel) - set(core))
+        #
+        #     for i in range(len(core)):
+        #         core_total.append(core[i])
+        #         neighborCore.append(set(neighbor))
+        #
+        #
+        # if len(neighbor) <min_Pts:  # 边界点筛查，领域内是否有核心点。
+        #     #
+        #     # if len(neighbor)==0:
+        #     #     continue
+        #     neighborCore.append(set(neighbor))
+        #     neighbor.insert(0,center)
+        #     border.append(neighbor)
+
+    core_total=set(core_total)
     return (neighborCore,core_total,border)
 
 
 
-def DBSCAN(X,eps,min_Pts):
+def DBSCAN(X, eps, min_Pts):
     k = -1          #初始化聚类簇数 k=-1
 
+    neighbor_list = []  # 用来保存每个数据的邻域
+
     gama = set([x for x in range(len(X))])  # 初始化未访问样本集合：gama
+
     cluster = [-1 for _ in range(len(X))]  # 聚类
+
     neighbor_list,omega_list,border=hnswlibTok(X,eps,min_Pts)
-    core = omega_list
-
-    omega_list=dict(zip(range(len(omega_list)),omega_list))
 
 
 
-
-    while len(omega_list.keys()) > 0:
+    while len(omega_list) > 0:
         gama_old = copy.deepcopy(gama)
-        j = random.choice(list(omega_list.keys()))  # 随机选取一个核心对象
+        j = random.choice(list(omega_list))  # 随机选取一个核心对象
         k = k + 1
-        gama=gama-set(omega_list[j])      #从集合中删除核心点，表示已经访问了。
-        gama=gama-set(neighbor_list[j])
-
-
-        #遍历查看这个核心点的邻居是否有其它的核心点。
-        meg_keys = list(omega_list.keys())
-        meg_keys.remove(j)
-
-        neighbor_j=neighbor_list[j]
-        for t in meg_keys:
-           core_set_t=omega_list[t]
-           interNumber=len(list(set(neighbor_j).intersection(core_set_t)))
-           if interNumber!=0:
-               gama = gama - core_set_t         #从数据集中删除核心集交点，表示该核心点与其他合并。
-               omega_list.pop(t)        #从核心点数据集中删除核心集交点，表示该核心点与其他合并。
-               gama=gama-set(neighbor_list[t])
-           else:
-               continue
-
-
-        Ck=gama_old-gama
-
+        Q = list()
+        Q.append(j)
+        gama.remove(j)
+        while len(Q) > 0:
+            q = Q[0]
+            Q.remove(q)
+            if len(neighbor_list[q]) >= min_Pts:
+                delta = neighbor_list[q] & gama
+                deltalist = list(delta)
+                for i in range(len(delta)):
+                    Q.append(deltalist[i])
+                    gama = gama - delta
+        Ck = gama_old - gama
         Cklist = list(Ck)
         for i in range(len(Ck)):
             cluster[Cklist[i]] = k
+        omega_list = omega_list - Ck
 
-        omega_list.pop(j)  # 已经抽取出的核心对象，从核心点集合进行删除。
 
-    core_c=[]
-
-    for i in core:
-        i=list(i)
-        core_c=core_c+i
     for i in range(len(border)):
         bor_i=set(border[i])
-        co=list(set(bor_i).intersection(core_c))
+        co=list(set(bor_i).intersection(omega_list))
         if len(co)==0:
             continue
         else:

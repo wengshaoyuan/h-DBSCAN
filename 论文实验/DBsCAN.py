@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import time
 import copy
 import datetime
-
+from sklearn.metrics import accuracy_score
 def find_neighbor(j, x, eps):
     N = list()
     for i in range(x.shape[0]):
@@ -33,6 +33,9 @@ def DBSCAN(X, eps, min_Pts):
     omega_list = set(omega_list)  # 转化为集合便于操作
 
 
+    print(len(omega_list))
+
+
 
 
     while len(omega_list) > 0:
@@ -56,7 +59,7 @@ def DBSCAN(X, eps, min_Pts):
                     gama = gama - delta
         Ck = gama_old - gama
         Cklist = list(Ck)
-        print(len(gama))
+
 
         for i in range(len(Ck)):
             cluster[Cklist[i]] = k
@@ -65,6 +68,39 @@ def DBSCAN(X, eps, min_Pts):
 
     return cluster
 
+def presion(y_true, y_pred):
+
+    class_label=list(set(y_true))
+
+    #将相同下标的元素发在一起。
+    label_index=[]
+    for i in class_label:
+        c=[]
+        for j in range(len(y_true)):
+            if y_true[j]==i:
+                c.append(j)
+        label_index.append(c)
+
+    # 查看是否正确分类
+    y_ture_lable=list(range(len(y_true)))
+    for i in label_index:
+        pred_label=[]
+        for j in i:
+            if y_pred[j]==-1:
+                continue
+            pred_label.append(y_pred[j])
+
+
+        if len(pred_label)==0:
+            max_label=len(class_label)+100
+        else:
+            max_label = max(pred_label, key=pred_label.count)
+        for s in i:
+            y_ture_lable[s]=max_label
+    print(y_ture_lable)
+
+
+    return accuracy_score(y_ture_lable,y_pred)
 
 
 iris = datasets.load_iris()
@@ -74,13 +110,13 @@ eps = 0.4
 min_Pts = 9
 begin = datetime.datetime.now()
 C = DBSCAN(X, eps, min_Pts)
-print(C)
+
 end = datetime.datetime.now()
 
 
 totalTime=(end-begin).total_seconds()
 
-
+print(presion(iris.target,C))
 
 plt.figure()
 plt.scatter(X[:, 0], X[:, 1], c=C)
