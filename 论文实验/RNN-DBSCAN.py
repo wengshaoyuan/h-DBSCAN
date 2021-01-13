@@ -5,7 +5,7 @@ from sklearn import datasets
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
 from collections import deque
-from numba import jit
+
 import datetime
 import csv
 '''
@@ -242,6 +242,7 @@ class RnnDbcsan(object):
                 pass
             pass
         pass
+
         end = datetime.datetime.now()
         #print(end - start)
         # self.draw_pic(assign,dataset)

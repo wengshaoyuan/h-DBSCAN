@@ -2,6 +2,7 @@ import random
 import numpy as np
 import copy
 import hnswlib
+import pandas as pd
 from collections import Counter
 import matplotlib.pyplot as plt
 import time
@@ -11,6 +12,7 @@ import datetime
 from sklearn.preprocessing import scale
 from sklearn.decomposition import PCA
 
+from sklearn.metrics import accuracy_score
 
 def graphConstruct(data,lable,M):
     dim = len(data[0])
@@ -34,6 +36,7 @@ def findNeighbor(labels):
         # 将属于这个点的内核对象，保存起来。认为与核心点是相同类型点
         if dist <= eps / 2:
             innerNeighbor.append(labels[j])
+
 
         # 将外环的点保存起来，扩张的时候。以此为基点向外寻找近邻点
         if dist > eps / 2 and dist <= eps:
@@ -86,7 +89,7 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
 
 
 
-    core=[]                    #核心点集合
+    core_total=[]                    #核心点集合
     border=[]
     neighborCore=[]
 
@@ -104,27 +107,27 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
         if len(neighbor)>=min_Pts:         #在该点为核心点的情况下才需要查询其外环邻居
             # 外环点向外扩张，查询其密度可达的邻居点。根据其论文解释，只需要查询三个半径内的点。
 
+            old_neighbor=neighbor
             reachData = []
             for r in reachPoint_label:
                 reachData.append(data[r])
+
+            #存放这一个簇内的核心点
+            core=[]
+            core.append(center)
 
             outerNeighborData = []
             for o in outerNeighbor:
                 outerNeighborData.append(data[o])
             # reach_p = graphConstruct(reachData, reachPoint_label, 20)
-            reach_labels, reach_distance = p.knn_query(outerNeighborData, k=len(reachData))
-            reach_core, reach_core_Neighbor = findReachNeighbor(reach_labels)  # 由外环得到的核心点的邻居点。
-            neighbor=neighbor+reach_core_Neighbor
+            if len(innerNeighbor)+1>=min_Pts:
+                core=core+innerNeighbor
+                #从邻居里面把已经认定为是核心点的点删掉。
+                origDatalabel = list(set(origDatalabel) - set(core))
+            core_total.append(set(core))
+            neighborCore.append(neighbor)
 
-            #这个neighbor是内环加外环的点，已经查询过领域了 不需要重复计算。
-            origDatalabel=list(set(origDatalabel)-set(neighbor))
 
-
-            neighborCore.append(set(neighbor))
-            c=reach_core+innerNeighbor
-            c.insert(0,center)
-
-            core.append(c)
         if len(neighbor) <min_Pts:  # 边界点筛查，领域内是否有核心点。
 
             if len(neighbor)==0:
@@ -132,7 +135,9 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
             neighbor.insert(0,center)
             border.append(neighbor)
 
-    return (neighborCore,core,border)
+
+
+    return (neighborCore,core_total,border)
 
 
 
@@ -157,21 +162,20 @@ def DBSCAN(X,eps,min_Pts):
         gama=gama-set(neighbor_list[j])
 
 
-        for i in neighbor_list[j]:          #遍历查看这个核心点的邻居是否有其它的核心点。
-            meg_keys=list(omega_list.keys())
-            meg_keys.remove(j)
+        #遍历查看这个核心点的邻居是否有其它的核心点。
+        meg_keys = list(omega_list.keys())
+        meg_keys.remove(j)
 
-            for t in meg_keys:
-                if i not  in omega_list[t]:
-                    continue
-                if i in omega_list[t]:
-
-                    gama = gama - set(neighbor_list[t])
-                    gama=gama-set(omega_list[t])
-                    meg_keys.remove(t)
-                    omega_list.pop(t)
-            #
-            #         print('----------')
+        neighbor_j=neighbor_list[j]
+        for t in meg_keys:
+           core_set_t=omega_list[t]
+           interNumber=len(list(set(neighbor_j).intersection(core_set_t)))
+           if interNumber!=0:
+               gama = gama - core_set_t         #从数据集中删除核心集交点，表示该核心点与其他合并。
+               omega_list.pop(t)        #从核心点数据集中删除核心集交点，表示该核心点与其他合并。
+               gama=gama-set(neighbor_list[t])
+           else:
+               continue
 
 
         Ck=gama_old-gama
@@ -181,10 +185,12 @@ def DBSCAN(X,eps,min_Pts):
             cluster[Cklist[i]] = k
 
         omega_list.pop(j)  # 已经抽取出的核心对象，从核心点集合进行删除。
+
     core_c=[]
+
     for i in core:
+        i=list(i)
         core_c=core_c+i
-    core_c=set(core_c)
     for i in range(len(border)):
         bor_i=set(border[i])
         co=list(set(bor_i).intersection(core_c))
@@ -197,11 +203,6 @@ def DBSCAN(X,eps,min_Pts):
 
             cluster[bor_center]=core_label
 
-
-
-
-
-
     return cluster
 
 
@@ -211,29 +212,43 @@ def getData():
     data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
     target = iris.target
     return data,target
-def presion(y_true, y_pred,length):
-    y_true_unique=list(set(y_true))         #返回含有多少的分类
+def presion(y_true, y_pred):
 
-    sum = 0
-    for t in y_true_unique:
-        target_group=list(np.where(y_true == y_true_unique[t])[0])
-        cluster = [y_pred[i] for i
-                   in target_group]  # 取出分到相同组的index
+    class_label=list(set(y_true))
 
-        cluster_d=[]
-        for i in cluster:               #移除噪点，噪点的lable是-1
-            if i !=-1:
-                cluster_d.append(i)
-        if len(cluster_d)>0:
+    #将相同下标的元素发在一起。
+    label_index=[]
+    for i in class_label:
+        c=[]
+        for j in range(len(y_true)):
+            if y_true[j]==i:
+                c.append(j)
+        label_index.append(c)
 
-            c=Counter(cluster_d)
-            lable_modst=(c.most_common(1)[0][0])
+    # 查看是否正确分类
+    y_ture_lable=list(range(len(y_true)))
+    for i in label_index:
+        pred_label=[]
+        for j in i:
+            if y_pred[j]==-1:
+                continue
+            pred_label.append(y_pred[j])
 
-            for j in cluster_d:
-                if j==lable_modst:
-                    sum=sum+1
-    presionz=sum/length
-    return presionz
+
+        if len(pred_label)==0:
+            max_label=len(class_label)+100
+        else:
+            max_label = max(pred_label, key=pred_label.count)
+        for s in i:
+            y_ture_lable[s]=max_label
+    print(y_ture_lable)
+
+    print(accuracy_score(y_ture_lable,y_pred))
+    return y_ture_lable
+
+
+
+
 
 
 if __name__ == '__main__':
@@ -250,7 +265,9 @@ if __name__ == '__main__':
     C=DBSCAN(data, eps, min_Pts)
     end = datetime.datetime.now()
 
-    pp=presion(target,C,len(C))
+
+
+    pp=presion(target,C)
 
     print(pp)
 
