@@ -47,11 +47,18 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
 
         if len(neighbor)>=min_Pts:
             core.append(center)
+
+
+
+
         neighbor_list.append(set(neighbor))
         data_label.remove(center)
     core=set(core)
-    print(neighbor_list)
-    print(core)
+
+
+
+
+
     return neighbor_list,core
 
 

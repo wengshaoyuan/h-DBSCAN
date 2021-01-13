@@ -99,8 +99,8 @@ def presion(y_true, y_pred):
             y_ture_lable[s]=max_label
     print(y_ture_lable)
 
-
-    return accuracy_score(y_ture_lable,y_pred)
+    acc=accuracy_score(y_ture_lable,y_pred)
+    return acc
 
 
 iris = datasets.load_iris()
