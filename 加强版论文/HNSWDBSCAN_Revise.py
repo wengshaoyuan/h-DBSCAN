@@ -39,7 +39,6 @@ def findNeighbor(labels,data):
             neighbor.append(centers)
             neighbor.append(neighbor_before[j])
         if dist<=3*eps:
-            three_neighbor.append(centers)
             three_neighbor.append(neighbor_before[j])
         else:
             break
@@ -57,28 +56,39 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
 
     core=[]
     neighbor_list=[]
+    border_list=[]
     while len(data_label)!=0:
         center=data_label[0]
-        data_label.remove(center)
+        data_label.remove(center)           #把查询点删除了。
         lable,distant=p.knn_query(data[center],k=len(data))
+
         neighbor,innerMC,outerMC,three_neighbor=findNeighbor(lable, data)
+
+
         if len(neighbor)>=min_Pts:
             core.append(center)
 
             #在内环的邻居数大于密度阈值时，才进行查询。
             if len(innerMC)>=min_Pts:
                 core=core+innerMC
-                data_label=list(set(data_label)-set(innerMC))       #内环不用计算领域了。
-                null_list=[() for i in range(len(innerMC))]     #这个内核核心点的邻居点，设为空。
-                neighbor_list=neighbor_list+null_list
-            neighbor_list.append(set(neighbor))
+                null_list = [[] for i in range(len(set(innerMC)))]  # 这个内核核心点的邻居点，设为空。
+                neighbor_list = neighbor_list + null_list
+
+                data_label = list(set(data_label) - set(innerMC))
+
 
         if len(neighbor)<min_Pts:
             if len(neighbor)==1:
                 p.mark_deleted(center)
-            neighbor_list.append(set(neighbor))
+            print(neighbor)
+            print(center)
+
+            border_list.append(neighbor)
+        neighbor_list.append(set(neighbor))
     core=set(core)
-    return neighbor_list,core
+
+
+    return neighbor_list,core,border_list
 
 def DBSCAN(X, eps, min_Pts):
     k = -1          #初始化聚类簇数 k=-1
@@ -89,33 +99,40 @@ def DBSCAN(X, eps, min_Pts):
 
     cluster = [-1 for _ in range(len(X))]  # 聚类
 
-    neighbor_list,omega_list=hnswlibTok(X,eps,min_Pts)
+    neighbor_list,omega_list,border_list=hnswlibTok(X,eps,min_Pts)
+
 
 
     while len(omega_list) > 0:
+
         gama_old = copy.deepcopy(gama)
         j = random.choice(list(omega_list))  # 随机选取一个核心对象
 
         if len(neighbor_list[j])==0:
-            continue
-        k = k + 1
-        Q = list()
-        Q.append(j)
-        gama.remove(j)
-        while len(Q) > 0:
-            q = Q[0]
-            Q.remove(q)
-            if len(neighbor_list[q]) >= min_Pts:
-                delta = neighbor_list[q] & gama
-                deltalist = list(delta)
-                for i in range(len(delta)):
-                    Q.append(deltalist[i])
-                    gama = gama - delta
-        Ck = gama_old - gama
-        Cklist = list(Ck)
-        for i in range(len(Ck)):
-            cluster[Cklist[i]] = k
-        omega_list = omega_list - Ck
+            omega_list.remove(j)
+        if len(neighbor_list[j])!=0:
+            k = k + 1
+            Q = list()
+            Q.append(j)
+            gama.remove(j)
+            while len(Q) > 0:
+                q = Q[0]
+                Q.remove(q)
+                if len(neighbor_list[q]) >= min_Pts:
+                    delta = neighbor_list[q] & gama
+                    deltalist = list(delta)
+                    for i in range(len(delta)):
+                        Q.append(deltalist[i])
+                        gama = gama - delta
+            Ck = gama_old - gama
+            Cklist = list(Ck)
+            for i in range(len(Ck)):
+                cluster[Cklist[i]] = k
+            omega_list = omega_list - Ck
+
+    for i in border_list:
+        print(i)
+
     return cluster
 def getData():
     # 获取数据iris

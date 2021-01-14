@@ -221,11 +221,15 @@ class RnnDbcsan(object):
         start = datetime.datetime.now()
         cluster = 0
         assign = np.array([[0.0]*2 for i in range(len(dataset))])
+
         assign[:] = dataset[:,[3,2]]
+
+
         '''
         初始化近邻索引表和逆向近邻索引表
         '''
         neb_index = self.neighbor_index(data,k)
+
         #print(neb_index)
         end_neb = datetime.datetime.now()
         #print(end_neb - start)
@@ -257,12 +261,11 @@ if __name__ == '__main__':
     eps = 0.4
     min_Pts = 9
     k = 10
-    # file = 'dataset/r15.csv'
+
     rdb = RnnDbcsan()
     rdb.main_function(data, 10)
 
-    # data = np.array(rdb.init_set(file))
-    # #print(data)
+
 
 
 
