@@ -80,10 +80,8 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
         if len(neighbor)<min_Pts:
             if len(neighbor)==1:
                 p.mark_deleted(center)
-            print(neighbor)
-            print(center)
-
-            border_list.append(neighbor)
+            if len(neighbor)!=0:
+                border_list.append(neighbor)
         neighbor_list.append(set(neighbor))
     core=set(core)
 
@@ -131,8 +129,9 @@ def DBSCAN(X, eps, min_Pts):
             omega_list = omega_list - Ck
 
     for i in border_list:
-        print(i)
-
+        number=set(i).intersection(omega_list)
+        if len(number)!=0:
+            cluster[i[0]]=cluster[list(number)[0]]
     return cluster
 def getData():
     # 获取数据iris
