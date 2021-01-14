@@ -5,9 +5,9 @@ import hnswlib
 from sklearn.metrics import accuracy_score
 from sklearn import datasets
 import datetime
-def graphConstruct(data):
+def graphConstruct(data,data_lables):
     dim = len(data[0])
-    data_lables = range(len(data))
+
     p = hnswlib.Index(space='l2', dim=dim)
     p.init_index(max_elements=len(data), ef_construction=200, M=20)
     p.add_items(data, data_lables)
@@ -15,24 +15,43 @@ def graphConstruct(data):
     return p
 def findNeighbor(labels,data):
 
-    for i in labels:
-        centers = data[i[0]]
-        neighbor = i
-        dist_list = []
-        for j in range(1, len(i)):
-            curr = data[i[j]]
-            dist = np.sqrt(np.sum(np.square(centers - curr)))
-            dist_list.append(dist)
+    neighbor_before=labels[0]
+    centers=neighbor_before[0]
 
-            if dist > eps:  # 找到小于半径的截至索引位置
-                neighbor = neighbor[0:j]
-                break
-    return neighbor
+    dist_list = []
+    innerMC=[]
+    outerMC=[]
+
+    neighbor=[]
+
+    three_neighbor=[]
+    for j in range(1, len(neighbor_before)):
+        curr = data[neighbor_before[j]]
+        dist = np.sqrt(np.sum(np.square(data[centers]- curr)))
+        dist_list.append(dist)
+        if dist <=0.5 * eps:
+            innerMC.append(neighbor_before[j])
+
+        if dist>0.5*eps and dist<=eps:
+            outerMC.append(neighbor_before[j])
+
+        if dist<=eps:
+            neighbor.append(centers)
+            neighbor.append(neighbor_before[j])
+        if dist<=3*eps:
+            three_neighbor.append(centers)
+            three_neighbor.append(neighbor_before[j])
+        else:
+            break
+
+    return neighbor,innerMC,outerMC,three_neighbor
 
 
 
 def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据点的最近邻
-    p=graphConstruct(data)  #构建遍历层图。
+    data_lables = range(len(data))
+    p=graphConstruct(data,data_lables)  #构建遍历层图。
+
 
     data_label=list(range(len(data)))
 
@@ -40,34 +59,26 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
     neighbor_list=[]
     while len(data_label)!=0:
         center=data_label[0]
-
+        data_label.remove(center)
         lable,distant=p.knn_query(data[center],k=len(data))
-        neighbor=findNeighbor(lable, data)
-
-
+        neighbor,innerMC,outerMC,three_neighbor=findNeighbor(lable, data)
         if len(neighbor)>=min_Pts:
             core.append(center)
 
+            #在内环的邻居数大于密度阈值时，才进行查询。
+            if len(innerMC)>=min_Pts:
+                core=core+innerMC
+                data_label=list(set(data_label)-set(innerMC))       #内环不用计算领域了。
+                null_list=[() for i in range(len(innerMC))]     #这个内核核心点的邻居点，设为空。
+                neighbor_list=neighbor_list+null_list
+            neighbor_list.append(set(neighbor))
 
-
-
-        neighbor_list.append(set(neighbor))
-        data_label.remove(center)
+        if len(neighbor)<min_Pts:
+            if len(neighbor)==1:
+                p.mark_deleted(center)
+            neighbor_list.append(set(neighbor))
     core=set(core)
-
-
-
-
-
     return neighbor_list,core
-
-
-
-
-
-
-
-
 
 def DBSCAN(X, eps, min_Pts):
     k = -1          #初始化聚类簇数 k=-1
@@ -84,6 +95,9 @@ def DBSCAN(X, eps, min_Pts):
     while len(omega_list) > 0:
         gama_old = copy.deepcopy(gama)
         j = random.choice(list(omega_list))  # 随机选取一个核心对象
+
+        if len(neighbor_list[j])==0:
+            continue
         k = k + 1
         Q = list()
         Q.append(j)
@@ -103,8 +117,6 @@ def DBSCAN(X, eps, min_Pts):
             cluster[Cklist[i]] = k
         omega_list = omega_list - Ck
     return cluster
-
-
 def getData():
     # 获取数据iris
     iris = datasets.load_iris()
@@ -141,15 +153,17 @@ def presion(y_true, y_pred):
         for s in i:
             y_ture_lable[s]=max_label
 
-    return y_ture_lable
+
+    acc = accuracy_score(y_ture_lable, y_pred)
+    return acc
 
 
 
 if __name__ == '__main__':
 
     data,target=getData()       #获取数据
-    eps = 0.4
-    min_Pts = 9
+    eps = 0.436
+    min_Pts = 4
 
 
     #优化后的HNSW-DBSCAN
@@ -158,14 +172,8 @@ if __name__ == '__main__':
 
     C=DBSCAN(data, eps, min_Pts)
     end = datetime.datetime.now()
-
-
-
     pp=presion(target,C)
-
     print(pp)
-
-
     #得到时间
     totalTime=(end-begin).total_seconds()
     print(totalTime)

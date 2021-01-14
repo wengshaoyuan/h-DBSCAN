@@ -106,8 +106,8 @@ def presion(y_true, y_pred):
 iris = datasets.load_iris()
 X = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
 
-eps = 0.4
-min_Pts = 9
+eps = 0.436
+min_Pts = 4
 begin = datetime.datetime.now()
 C = DBSCAN(X, eps, min_Pts)
 
@@ -117,6 +117,7 @@ end = datetime.datetime.now()
 totalTime=(end-begin).total_seconds()
 
 print(presion(iris.target,C))
+print(totalTime)
 
 plt.figure()
 plt.scatter(X[:, 0], X[:, 1], c=C)
