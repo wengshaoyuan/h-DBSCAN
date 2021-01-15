@@ -68,6 +68,8 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
         if len(neighbor)>=min_Pts:
             core.append(center)
 
+
+
             #在内环的邻居数大于密度阈值时，才进行查询。
             if len(innerMC)>=min_Pts:
                 core=core+innerMC
@@ -75,6 +77,7 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
                 neighbor_list = neighbor_list + null_list
 
                 data_label = list(set(data_label) - set(innerMC))
+
 
 
         if len(neighbor)<min_Pts:
