@@ -33,11 +33,6 @@ def DBSCAN(X, eps, min_Pts):
     omega_list = set(omega_list)  # 转化为集合便于操作
 
 
-    print(len(omega_list))
-
-
-
-
     while len(omega_list) > 0:
         gama_old = copy.deepcopy(gama)
         j = random.choice(list(omega_list))  # 随机选取一个核心对象
@@ -64,7 +59,6 @@ def DBSCAN(X, eps, min_Pts):
         for i in range(len(Ck)):
             cluster[Cklist[i]] = k
         omega_list = omega_list - Ck
-
 
     return cluster
 
@@ -97,28 +91,9 @@ def presion(y_true, y_pred):
             max_label = max(pred_label, key=pred_label.count)
         for s in i:
             y_ture_lable[s]=max_label
-    print(y_ture_lable)
+
 
     acc=accuracy_score(y_ture_lable,y_pred)
     return acc
 
 
-iris = datasets.load_iris()
-X = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
-
-eps = 0.436
-min_Pts = 4
-begin = datetime.datetime.now()
-C = DBSCAN(X, eps, min_Pts)
-
-end = datetime.datetime.now()
-
-
-totalTime=(end-begin).total_seconds()
-
-print(presion(iris.target,C))
-print(totalTime)
-
-plt.figure()
-plt.scatter(X[:, 0], X[:, 1], c=C)
-plt.show()

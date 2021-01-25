@@ -1,69 +1,113 @@
-import HNSWDBSCAN as HNSW
+import HNSWDBSCAN_Revise as HNSW
 import DBsCAN as ORIdbscan
+from sklearn.metrics import accuracy_score
 from collections import Counter
 import matplotlib.pyplot as plt
 import time
 import numpy as np
 from sklearn import datasets
+import pandas as pd
 import datetime
 from sklearn.preprocessing import scale
 from sklearn.decomposition import PCA
 
 def getData():
     # # 获取数据iris
-    iris = datasets.load_iris()
-    data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
-    target = iris.target
+    # iris = datasets.load_iris()
+    # data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
+    # target = iris.target
 
 
-
+    # # 获取D31数据集
+    D31=pd.read_table("D31.txt", header=None)
+    data=(D31[[0,1]]).values
+    target=(D31[2]).values
 
     return data,target
-def presion(y_true, y_pred,length):
-    y_true_unique=list(set(y_true))         #返回含有多少的分类
+def presion(y_true, y_pred):
 
-    sum = 0
-    for t in y_true_unique:
-        target_group=list(np.where(y_true == y_true_unique[t])[0])
-        cluster = [y_pred[i] for i
-                   in target_group]  # 取出分到相同组的index
+    class_label=list(set(y_true))
 
-        cluster_d=[]
-        for i in cluster:               #移除噪点，噪点的lable是-1
-            if i !=-1:
-                cluster_d.append(i)
-        if len(cluster_d)>0:
+    #将相同下标的元素发在一起。
+    label_index=[]
+    for i in class_label:
+        c=[]
+        for j in range(len(y_true)):
+            if y_true[j]==i:
+                c.append(j)
+        label_index.append(c)
 
-            c=Counter(cluster_d)
-            lable_modst=(c.most_common(1)[0][0])
+    # 查看是否正确分类
+    y_ture_lable=list(range(len(y_true)))
+    for i in label_index:
+        pred_label=[]
+        for j in i:
+            if y_pred[j]==-1:
+                continue
+            pred_label.append(y_pred[j])
 
-            for j in cluster_d:
-                if j==lable_modst:
-                    sum=sum+1
-    presionz=sum/length
-    return presionz
+
+        if len(pred_label)==0:
+            max_label=len(class_label)+100
+        else:
+            max_label = max(pred_label, key=pred_label.count)
+        for s in i:
+            y_ture_lable[s]=max_label
+
+
+    acc = accuracy_score(y_ture_lable, y_pred)
+    return acc
+
+
 
 if __name__ == '__main__':
+    # iris 数据集
+    # data,target=getData()       #获取数据
+    # eps = 0.436
+    # min_Pts = 4
 
-    data,target=getData()       #获取数据
-    eps = 0.8
-    min_Pts = 15
-
-
-    #优化后的HNSW-DBSCAN
-    print('HNSDBSCAN  的结果')
-    begin = datetime.datetime.now()
-    #得到预测值
-    label_pred = HNSW.DBSCAN(data, eps, min_Pts)
-    end = datetime.datetime.now()
-    #得到时间
-    totalTime=(end-begin).total_seconds()
-    print(totalTime)
-    presionss1 = presion(target, label_pred, len(data))
-    print(presionss1)
-
+    # # D31 数据集
     #
+    # data, target = getData()  # 获取数据
     #
+    # eps = 0.8
+    # min_Pts = 30
+    #
+    # # 优化后的HNSW-DBSCAN
+    #
+    # begin = datetime.datetime.now()
+    #
+    # C = ORIdbscan.DBSCAN(data, eps, min_Pts)
+    #
+    # end = datetime.datetime.now()
+    # pp = presion(target, C)
+    # # 得到时间
+    # totalTime = (end - begin).total_seconds()
     # # 画图
-    # plt.scatter(data[:, 0], data[:, 1], c=label_pred)
+    # plt.scatter(data[:, 0], data[:, 1], c=C)
     # plt.show()
+    # print(pp)
+
+    # D31 数据集
+
+    data, target = getData()  # 获取数据
+
+    eps = 0.8
+    min_Pts = 30
+
+    # 优化后的HNSW-DBSCAN
+
+    begin = datetime.datetime.now()
+
+    C = HNSW.DBSCAN(data, eps, min_Pts)
+    end = datetime.datetime.now()
+
+    # 得到时间
+    totalTime = (end - begin).total_seconds()
+    print(totalTime)
+    pp = presion(target, C)
+    print(pp)
+
+    # 画图
+    plt.scatter(data[:, 0], data[:, 1], c=C)
+    plt.show()

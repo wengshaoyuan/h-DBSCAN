@@ -1,9 +1,11 @@
 import random
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 import hnswlib
 from sklearn.metrics import accuracy_score
 from sklearn import datasets
+import pandas as pd
 import datetime
 def graphConstruct(data,data_lables):
     dim = len(data[0])
@@ -13,7 +15,7 @@ def graphConstruct(data,data_lables):
     p.add_items(data, data_lables)
     p.set_ef(50)
     return p
-def findNeighbor(labels,data):
+def findNeighbor(labels,data,eps):
 
     neighbor_before=labels[0]
     centers=neighbor_before[0]
@@ -62,7 +64,7 @@ def hnswlibTok(data,eps,min_Pts):                  #使用HNSW查找每个数据
         data_label.remove(center)           #把查询点删除了。
         lable,distant=p.knn_query(data[center],k=len(data))
 
-        neighbor,innerMC,outerMC,three_neighbor=findNeighbor(lable, data)
+        neighbor,innerMC,outerMC,three_neighbor=findNeighbor(lable, data,eps)
 
 
         if len(neighbor)>=min_Pts:
@@ -101,9 +103,6 @@ def DBSCAN(X, eps, min_Pts):
     cluster = [-1 for _ in range(len(X))]  # 聚类
 
     neighbor_list,omega_list,border_list=hnswlibTok(X,eps,min_Pts)
-
-
-
     while len(omega_list) > 0:
 
         gama_old = copy.deepcopy(gama)
@@ -137,68 +136,15 @@ def DBSCAN(X, eps, min_Pts):
             cluster[i[0]]=cluster[list(number)[0]]
     return cluster
 def getData():
-    # 获取数据iris
-    iris = datasets.load_iris()
-    data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
-    target = iris.target
+    # # 获取数据iris
+    # iris = datasets.load_iris()
+    # data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
+    # target = iris.target
+
+
+    # # 获取D31数据集
+    D31=pd.read_table("D31.txt", header=None)
+    data=(D31[[0,1]]).values
+    target=(D31[2]).values
+
     return data,target
-def presion(y_true, y_pred):
-
-    class_label=list(set(y_true))
-
-    #将相同下标的元素发在一起。
-    label_index=[]
-    for i in class_label:
-        c=[]
-        for j in range(len(y_true)):
-            if y_true[j]==i:
-                c.append(j)
-        label_index.append(c)
-
-    # 查看是否正确分类
-    y_ture_lable=list(range(len(y_true)))
-    for i in label_index:
-        pred_label=[]
-        for j in i:
-            if y_pred[j]==-1:
-                continue
-            pred_label.append(y_pred[j])
-
-
-        if len(pred_label)==0:
-            max_label=len(class_label)+100
-        else:
-            max_label = max(pred_label, key=pred_label.count)
-        for s in i:
-            y_ture_lable[s]=max_label
-
-
-    acc = accuracy_score(y_ture_lable, y_pred)
-    return acc
-
-
-
-if __name__ == '__main__':
-
-    data,target=getData()       #获取数据
-    eps = 0.436
-    min_Pts = 4
-
-
-    #优化后的HNSW-DBSCAN
-
-    begin = datetime.datetime.now()
-
-    C=DBSCAN(data, eps, min_Pts)
-    end = datetime.datetime.now()
-    pp=presion(target,C)
-    print(pp)
-    #得到时间
-    totalTime=(end-begin).total_seconds()
-    print(totalTime)
-
-
-
-    # # 画图
-    # plt.scatter(data[:, 0], data[:, 1])
-    # plt.show()
