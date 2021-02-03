@@ -32,7 +32,6 @@ def DBSCAN(X, eps, min_Pts):
             omega_list.append(i)  # 将样本加入核心对象集合
     omega_list = set(omega_list)  # 转化为集合便于操作
 
-
     while len(omega_list) > 0:
         gama_old = copy.deepcopy(gama)
         j = random.choice(list(omega_list))  # 随机选取一个核心对象
@@ -95,5 +94,4 @@ def presion(y_true, y_pred):
 
     acc=accuracy_score(y_ture_lable,y_pred)
     return acc
-
 

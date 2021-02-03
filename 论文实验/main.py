@@ -1,4 +1,5 @@
-import HNSWDBSCAN_Revise as HNSW
+
+import HNSWDBSCAN as HNSW_D
 import DBsCAN as ORIdbscan
 from sklearn.metrics import accuracy_score
 from collections import Counter
@@ -17,11 +18,20 @@ def getData():
     # data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
     # target = iris.target
 
-
     # # 获取D31数据集
-    D31=pd.read_table("D31.txt", header=None)
-    data=(D31[[0,1]]).values
-    target=(D31[2]).values
+    # D31=pd.read_table("D31.txt", header=None)
+    # data=(D31[[0,1]]).values
+    # target=(D31[2]).values
+
+    # # 获取t4.8k数据集
+    # D31 = pd.read_csv("t4.8k.csv", header=None)
+    # data = (D31[[0, 1]]).values
+    # target = (D31[2]).values
+
+    # 获取788数据集
+    D31 = pd.read_csv("788points.csv", header=None)
+    data = (D31[[0, 1]]).values
+    target = list(range(len(D31)))
 
     return data,target
 def presion(y_true, y_pred):
@@ -61,51 +71,40 @@ def presion(y_true, y_pred):
 
 
 if __name__ == '__main__':
-    # iris 数据集
+    # # iris 数据集
     # data,target=getData()       #获取数据
     # eps = 0.436
     # min_Pts = 4
 
     # # D31 数据集
-    #
     # data, target = getData()  # 获取数据
-    #
     # eps = 0.8
     # min_Pts = 30
-    #
-    # # 优化后的HNSW-DBSCAN
-    #
-    # begin = datetime.datetime.now()
-    #
-    # C = ORIdbscan.DBSCAN(data, eps, min_Pts)
-    #
-    # end = datetime.datetime.now()
-    # pp = presion(target, C)
-    # # 得到时间
-    # totalTime = (end - begin).total_seconds()
-    # # 画图
-    # plt.scatter(data[:, 0], data[:, 1], c=C)
-    # plt.show()
-    # print(pp)
 
-    # D31 数据集
+    # # t4.8k数据集
+    # data, target = getData()  # 获取数据
+    # eps = 8.5
+    # min_Pts = 15
 
+
+    # 788 数据集
     data, target = getData()  # 获取数据
+    eps =1.5
+    min_Pts = 6
 
-    eps = 0.8
-    min_Pts = 30
 
     # 优化后的HNSW-DBSCAN
 
     begin = datetime.datetime.now()
 
-    C = HNSW.DBSCAN(data, eps, min_Pts)
+    C = HNSW_D.DBSCAN(data, eps, min_Pts)
     end = datetime.datetime.now()
 
     # 得到时间
     totalTime = (end - begin).total_seconds()
     print(totalTime)
     pp = presion(target, C)
+
     print(pp)
 
     # 画图

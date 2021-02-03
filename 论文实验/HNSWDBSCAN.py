@@ -38,8 +38,6 @@ def hnswlibTok(X,eps,min_Pts):                  #使用HNSW查找每个数据点
 def DBSCAN(X, eps, min_Pts):
     k = -1          #初始化聚类簇数 k=-1
 
-    neighbor_list = []  # 用来保存每个数据的邻域
-
     gama = set([x for x in range(len(X))])  # 初始化未访问样本集合：gama
 
     cluster = [-1 for _ in range(len(X))]  # 聚类
