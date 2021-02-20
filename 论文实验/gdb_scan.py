@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score
 
-this_eps =0.436
+this_eps =8.5
 # min_pts = 20  # not used in this algorithm
 
 
@@ -177,66 +177,45 @@ def assume(expression, reason="Expression Is Not True."):
 
 def presion(y_true, y_pred):
 
-    class_label=list(set(y_true))
 
-    #将相同下标的元素发在一起。
-    label_index=[]
-    for i in class_label:
-        c=[]
-        for j in range(len(y_true)):
-            if y_true[j]==i:
-                c.append(j)
-        label_index.append(c)
-
-    # 查看是否正确分类
-    y_ture_lable=list(range(len(y_true)))
-    for i in label_index:
-        pred_label=[]
-        for j in i:
-            if y_pred[j]==-1:
-                continue
-            pred_label.append(y_pred[j])
-
-
-        if len(pred_label)==0:
-            max_label=len(class_label)+100
-        else:
-            max_label = max(pred_label, key=pred_label.count)
-        for s in i:
-            y_ture_lable[s]=max_label
-
-
-    acc = accuracy_score(y_ture_lable, y_pred)
+    acc = accuracy_score(y_true, y_pred)
     return acc
 
-
-
-if __name__ == '__main__':
-
-    data=pd.read_csv("iris.txt",sep=",",header=None)
-    lable = (data[4]).values
-    data=(data[[0,1,2,3]]).values
-
-
-
-    data,cluster=getPoint(data)
-
-    begin = datetime.datetime.now()
-
-    cluster=gdb_scan(data,cluster)
-    end = datetime.datetime.now()
-
-    # 得到时间
-    totalTime = (end - begin).total_seconds()
-
-    score=presion(lable,cluster)
-
-    print(lable)
-    print(cluster)
-    print(accuracy_score(lable, cluster))
-    print(totalTime)
-
-
-
+#
+#
+# if __name__ == '__main__':
+#
+#     # data=pd.read_csv("iris.txt",sep=",",header=None)
+#     # lable = (data[4]).values
+#     # data=(data[[0,1,2,3]]).values
+#     # data = pd.read_csv("788points.csv", header=None)
+#     data = pd.read_csv("t4.8k.csv", header=None)
+#     print(data)
+#
+#
+#     lable = (data[2]).values
+#     data=(data[[0,1]]).values
+#
+#     # data=data.values
+#
+#     data,cluster=getPoint(data)
+#     begin = datetime.datetime.now()
+#
+#     cluster=gdb_scan(data,cluster)
+#     end = datetime.datetime.now()
+#
+#     # 得到时间
+#     totalTime = (end - begin).total_seconds()
+#
+#     # score=presion(lable,cluster)
+#
+#     print("精确度")
+#     print(accuracy_score(lable, cluster))
+#
+#     print("总时间")
+#     print(totalTime)
+#
+#
+#
 
 

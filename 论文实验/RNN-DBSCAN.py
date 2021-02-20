@@ -1,277 +1,421 @@
+# -*- coding: utf-8 -*-
+"""RNN_DBSCAN.ipynb
+# IMPLEMENTATION
+For performance reasons, a k-nn, k-rnn map will be constructed offline as an indexing table. 
+Nearest neighbors are found using scikit-learn's highly optimized KDTree implementation as a pure numpy implementation turned out to be very slow.
+"""
+
+import warnings
+from numpy import random
+import datetime
+import Flann
+warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
-from sklearn import datasets
-
-import matplotlib.pyplot as plt
-from sklearn import preprocessing
+import itertools
 from collections import deque
+# from datetime import datetime
+import matplotlib.pyplot as plt
+# %matplotlib inline
+import seaborn as sns
 
-import datetime
-import csv
-'''
-The value of cluster:
-99:'UNCLASSIFIED'
-98:'NOISE'
-'''
-class RnnDbcsan(object):
-    is_cluster = 99
-    count_time = 0
+from sklearn import metrics
+from sklearn.neighbors import KDTree
 
-    '''
-    distance:返回两个观测点之间的距离
-    '''
-    def distance(self,x,y):
-        x = np.array(x)
-        y = np.array(y)
-        dist = ((float(x[0]) - float(y[0]))**2 + (float(x[1]) - float(y[1]))**2)**0.5
-        return dist
-    pass
+from sklearn.preprocessing import StandardScaler
 
 
-    '''
-    init_set:获取数据集并添加辅助索引:
-    对于单个观察点：
-    x[0] means the value of x
-    x[1] means the value of y
-    x[2] means belongs to witch cluster
-    x[3] is index
-    '''
-    def init_set(self,url):
-        file = url
-        data = pd.read_csv(file)
-        data = np.array(data)
-        new_data = [[0.0]*4 for i in range(len(data))]
-        new_data = np.array(new_data)
-        count = 0
-        new_data[:,[0]] = data[:,[0]]
-        new_data[:,[1]] = data[:,[1]]
-        new_data[:,[2]] = self.is_cluster
-        for x in new_data:
-            x[3] = count
-            count += 1
-        return new_data
-    pass
-    '''
-    创建距离索引，将任意两个观察点的索引和距离放入数组中
-    '''
-    # @jit
-    def distance_index_struct(self,data):
-        distance_index = [[0.0]*3 for i in range(len(data)*len(data))]
-        distance_index = np.array(distance_index)
-        num = 0
-        for a in data:
-            for b in data:
-                distance_index[num,[0]] = a[3]
-                distance_index[num,[1]] = b[3]
-                distance_index[num,[2]] = self.distance(a,b)
-                num += 1
-        return distance_index
-    '''
-    创建邻居索引，将每个观察点的k近邻放入数组中
-    '''
-    # @jit
-    def neighbor_index(self,data,k):
-        index = [[0.0]*(k+1) for i in range(len(data))]
-        index = np.array(index)
-        index[:,0] = data[:,3]  
-        count = 0      
-        for da in data:
-            num = 0
-            neb = [[0.0]*3 for j in range(len(data))]
-            neb = np.array(neb)
-            for nebe in data:
-                dist = self.distance(da,nebe)
-                # #print(type(neb))
-                # #print(neb)
-                neb[num,0] = da[3]
-                neb[num,1] = nebe[3]
-                neb[num,2] = dist
-                num += 1 
-            neb = sorted(neb[1:],key=lambda x:x[2])
-            neb = np.array(neb)
-            
-            for x in range(k):
-                index[count,x+1] = neb[x,1]
-            #print(index[count])
-            count += 1
-            
-        return index
-    pass
-    '''
-    创建逆邻居索引，将每个观察点的逆邻居放入数组中
-    '''
-    # @jit 
-    def r_neighbor_index(self,data,k,neb_index):
-        index = [[] for i in range(len(data))]
-        count = 0
-        for x in data:
-            index[count].append(x[3])
-            for z in data:
-                if(x[3] in self.find_neighbor(z[3],neb_index)):
-                    index[count].append(z[3])
-            #print(index[count])
-            count += 1
-            
-        for q in index:
-            q = np.array(q)
-        return index
+def dist(x, y):
+    return np.linalg.norm(x - y)
 
-    '''
-    通过索引查找观察点的邻居
-    '''
-    def find_neighbor(self,x_index,neb_index):
-        for i in neb_index:
-            if(i[0] == x_index):
-                return i[1:]
 
-    '''
-    通过索引查找观察点的逆向邻居
-    '''
-    def find_r_neighbor(self,x_index,r_neb_index):
-        for z in r_neb_index:
-            if(x_index == z[0]):
-                return np.array(z[1:])
+def n_k(x, k):
+    # use the pretrained indexed nn map
+    global kdt
+    global X
 
+    return (X[kdt.query(x.reshape(1, -1), k=k, return_distance=False)]). \
+        squeeze()
+
+
+def r_k(x, k, c_indexes=None):
     '''
-    neighbors = neighbor(x) + {y in r_neighbor(x):len(r_neighbor(y) > k}
+    returns the k-RNN of x
+
+    x: single element (2d numpy array)
+    X: total data matrix (n, d)
+    k: int
+    c_indexes: index list to sub set
     '''
-    def neighbors(self,x_index,neb_index,r_neb_index,k):
-        neighbor = self.find_neighbor(x_index,neb_index)
-        r_neighbor = self.find_r_neighbor(x_index,r_neb_index)
-        for q in r_neighbor:
-            if(len(self.find_r_neighbor(q,r_neb_index)) <= k):
-                list(r_neighbor).remove(q)
-        neighbors = list(neighbor) + list(r_neighbor)
-        neighbors = list(set(neighbors))
-        return neighbors
-        
+    global X
+
+    # condition 2: all the points in N that have x as a NN
+    ## first, find the nearest neaghbors for each vector in N
+    NN = [n_k(X[i, :], k) for i in range(X.shape[0])]
+
+
+    ## then, find the indexes of the vectors in X that have x in their NN set
+    idx = np.isclose(NN, x).all(axis=(2)).any(axis=1)
+    RNN = X[idx, :]
+
+    return RNN
+
+
+def is_directly_density_reachable(x, y, k):
     '''
-    通过观察点的索引来获取观察点的属性值
+    x, y: two vectors (each is a 2d numpy array)
+    k: int
     '''
-    def get_point_by_index(self,x_index,dataset):
-        q = [z for z in dataset if x_index == z[3]]
-        return q[0]
+    global X
+    global k_nn
+    global k_rnn
+    # condition 1: x is in the k-NN set of y
+    NN_y = n_k(y, k)
+
+    cond_1 = np.isclose(NN_y, x).all(axis=(1)).any()
+
+    # condition 2: k-RNN(y) >= k
+    RNN_y = k_rnn[match_indexes(y, X)][0]  # r_k(y, k)
+    cond_2 = RNN_y.shape[0] >= k
+
+    return cond_1 & cond_2
+
+
+def find_density_reachable_points(C, k):
     '''
-    在聚类结果集中将索引为x_index聚类结果放入
+    returns the pairs of vectors in :vectors: that are density reachable
+
+    C: Cluster we're interested in (2D numpy array)
+    k: int
     '''
-    def assignn(self,x_index,cluster,X):
-        for z in X:
-            if(x_index == z[0]):
-                z[1] = cluster
+
+    if C.shape[0] == 1:
+        return None
+
+    idx_range = range(C.shape[0])
+    indexes = []
+
+    for subset in itertools.combinations(idx_range, 2):
+        indexes.append(subset)
+
+    indexes = np.array(indexes, dtype=int)
+
+    # vectors: numpy array of arrays (containing candidate vectors)
+    vectors = C
+
+    # map indexes to their vrector
+    index_vector_map = {i: vectors[i, :] for i in np.ravel(indexes)}
+
+    xy_df = pd.DataFrame(indexes)
+    xy_df['x'] = xy_df[0].map(index_vector_map)  # list(f[:, 0, :])
+    xy_df['y'] = xy_df[1].map(index_vector_map)  # list(f[:, 1, :])
+    xy_df['is_den_con'] = 0
+    xy_df['is_den_con'] = xy_df.apply(lambda x :is_directly_density_reachable(x.x,x.y,k), axis=1)
+    xy_df = xy_df.loc[xy_df['is_den_con'] == True, ['x', 'y']]
+
+    return xy_df.values
+
+
+def density(C, k):
     '''
-    在结果集中取出索引为x_index的观察点的聚类结果
+    returns the density of a cluster
+    returns np.inf if there are no x,y points in C that satisfy the conditions \
+    stated in Definition 7
+
+    C: 2D numpy array [clustetr?]
+    X: Total dataset
     '''
-    def get_cluster_from_assign(self,x_index,assign):
-        for z in assign:
-            if(x_index == z[0]):
-                return z
-    '''
-    @prame:当前观察点，数据集，结果集，当前聚类，k，近邻索引表，逆向近邻索引表
-    '''
-    def expand_cluster(self,x,dataset,assign,cluster,k,neb_index,r_neb_index):
-        if(len(self.find_r_neighbor(x[3],r_neb_index)) <= k):
-            x[2] = 98
-            self.assignn(x[3],98,assign)
-            # self.draw_pic(assign,dataset)
-            return False
+
+    # find the indexes of C in X
+    global X
+    global k_rnn
+    c_indexes = match_indexes(C, X)
+
+    # add a new column to check the eligibility to be x and y (|R_k(x)| > k)
+    C_ = pd.DataFrame(C)
+    C_['RNN'] = [k_rnn[match_indexes(C[i, :], X)][0] for i in range(C.shape[0])]
+    C_['shape'] = C_['RNN'].apply(lambda x: x.shape[0])
+    C_.drop(['RNN'], axis=1, inplace=True)
+
+    C_ = C_.loc[C_['shape'] >= k, :]
+    C_ = C_.values[:, :-1]  # only the elgible vectors
+
+    # no eligible points in the cluster
+    if C_.shape[0] == 0:
+        return np.inf
+
+    else:
+        # narrowing down to only the densely connected pairs
+        C_d = find_density_reachable_points(C_, k)
+        # no eligible points in the cluster
+        if (C_d is None) or (C_d.shape[0] == 0):
+            return np.inf
         else:
-            queue = deque(self.neighbors(x[3],neb_index,r_neb_index,k))
-            x[2] = cluster
-            for z in queue:
-                self.assignn(z,cluster,assign)
-            while(len(queue) != 0):
-                y = queue[0]
-                queue.popleft()
-                if(len(self.find_r_neighbor(y,r_neb_index)) > k):
-                    new_neighbor = self.neighbors(y,neb_index,r_neb_index,k)
-                    for q in new_neighbor:
-                        if(self.get_cluster_from_assign(q,assign)[1] == 99.0):
-                            queue.append(q)
-                            self.assignn(q,cluster,assign)
-                        # elif(self.get_cluster_from_assign(q,assign)[1] == 98.0):
-                        #     self.assignn(q,cluster,assign)
-                        pass
-                    pass
-                pass
+            # calculate distances
+            distances = [dist(C_d[i][1], C_d[i][0]) for i in range(C_d.shape[0])]
+            density = np.max(distances)
+            return density
+
+
+def neighborhood_helper(x, k):
+    '''
+    calculates the set described in {y \in R_k(x) : |R_k(y)|>=k}
+    (elements(y) in k-RNN(x) that has more than (or equal) k elements in each of\
+    their respective k-RNN(y)s)
+
+    x: single element (2d numpy array)
+    k: int
+    '''
+    global k_rnn
+
+    # first find the k-RNN of x
+    RNN_x = k_rnn[match_indexes(x, X)][0]  # r_k(x, k)
+
+    # for each vector y in k-RNN(x): find k-RNN(y)...
+    RNN_y = np.array([k_rnn[match_indexes(y, X)][0] for y in RNN_x])
+    # .. such that |k-RNN(y)| > k
+    RNN_y_size = np.array([y.shape[0] for y in RNN_y]) > k
+
+    result = RNN_x[RNN_y_size]
+
+    return result
+
+
+def match_indexes(n, X):
+    '''
+    matches n with X and returns the indexes of X that have n's elements
+
+    n: 2D numpy array
+    X: 2D numpy array
+    '''
+    #   print(n)
+
+    if n.ndim > 1:
+        index_list = [np.isclose(X, n[i]).all(axis=1).nonzero()[0][0] for i in \
+                      range(n.shape[0])]
+
+    else:
+        index_list = [np.isclose(X, n).all(axis=1).nonzero()[0][0]]
+
+    return index_list
+
+
+def neighborhood(x, k):
+    '''
+    Algorithm 3
+    -----------
+
+    In addition to what's in the text, this returns the list of indexes(axis=0) \
+    of the neighborhood vectors in X matrix
+    '''
+    global X
+
+    NN = n_k(x, k)
+
+    other_vectors = neighborhood_helper(x, k)
+
+    if other_vectors.shape[0] != 0:
+        out = np.vstack((NN, other_vectors))
+        out = np.unique(out, axis=0)
+        return out, match_indexes(out, X)
+
+    else:
+        return NN, match_indexes(NN, X)
+
+
+def expand_cluster(x, cluster, assign, k, i):
+    '''
+    Algorithm 2
+    -----------
+
+    returns True
+
+    returns False: if x is noise
+
+    x: data point of interest (2D numpy array)
+    cluster: already assigned cluster (int)
+    assign: numpy array
+    k: int
+    i: index of x in X (passed from rnn_dbscan())
+    '''
+
+    global k_rnn
+    global X
+
+    r = k_rnn[match_indexes(x, X)][0]
+
+
+    if r.shape[0] < k:
+        assign[i] = -1
+        return False
+
+    else:
+        neighborhood_x, idx_x = neighborhood(x, k)
+        seeds = deque(neighborhood_x)
+        assign[i] = cluster
+        assign[idx_x] = cluster
+
+        while (len(seeds)) > 0:
+            y = seeds.pop()
+            r_y = k_rnn[match_indexes(y, X)][0]  # r_k(y, k)
+
+            if r_y.shape[0] >= k:
+                neighborhood_y, idx_y = neighborhood(y, k)
+                for z, j in zip(neighborhood_y, idx_y):
+                    if assign[j] == 0:
+                        seeds.extend([z])
+                        assign[j] = cluster
+                    elif assign[j] == -1:
+                        assign[j] = cluster
+
+        return True
+
+
+def expand_clusters(k, assign):
+    global X
+    global k_rnn
+
+    for i, x in enumerate(X):
+
+        if assign[i] == -1:
+
+            neighbors_x = n_k(x, k)
+            min_cluster = -1
+            min_dist = np.inf
+
+            for j, n in enumerate(neighbors_x):
+
+                idx = match_indexes(n, X)
+                cluster = assign[idx][0]
+                cluster_elements = X[idx, :]  # X[idx,:]
+                d = dist(x, n)
+
+                r_k_n = k_rnn[match_indexes(n, X)][0]  # r_k(n, k)
+                if (r_k_n.shape[0] >= k) & (d <= density(cluster_elements, k)) & \
+                        (d < min_dist):
+                    min_cluster = cluster
+                    min_dist = d
+
+            assign[i] = min_cluster
+
+
+def rnn_dbscan(X, k):
+    '''
+    returns a numpy array of shape X.shape[0] that contains the cluster \
+    assignment of each point.
+
+    0: unclassified
+    -1: noise
+
+    X: Data matrix (2D numpy array)
+    k: int (< X.shape[0])
+    '''
+
+    assign = np.zeros((X.shape[0]), dtype=object)
+
+    if (k <= 1 or k > X.shape[0]):
+        print("K must satisfy k>1 or k<X.shape[0]\n")
+        return assign
+
+    cluster = 1
+
+    for i in range(X.shape[0]):
+        x = X[i, :]
+        if assign[i] == 0:
+            if expand_cluster(x, cluster, assign, k, i):
+                cluster += cluster
+
+    print("Expanding clusters ... ")
+    expand_clusters(k, assign)
+
+    return assign
+
+
+def initialize_nn(X, k):
+    nn = np.array([n_k(X[i, :], k) for i in range(X.shape[0])])
+
+    return nn
+
+
+def initialize_rnn(X, k):
+    rnn = np.array([r_k(X[i, :], k) for i in range(X.shape[0])])
+
+    return rnn
+
+
+def pre_process(df):
+
+    X = df.values[:, :-1]
+
+    target = df.values[:, -1]
+
+    return X, target
+
+
+def run(df, k_range, plots=False):
+    global X, kdt, k_rnn
+    X, target = pre_process(df)
+
+    begin = datetime.datetime.now()
+    kdt = KDTree(X, leaf_size=30, metric='euclidean')
+
+    ARI = []
+
+    for k in k_range:
+
+        if (k <= 1 or k > X.shape[0]):
+            print("K must satisfy k>1 or k<X.shape[0]\n")
+            ARI.append(0)
             pass
-            # self.draw_pic(assign,dataset)
-            return True
-        pass
-    
-    '''
-    作图函数
-    '''
-    def draw_pic(self,assign,dataset):
-        new_assgin = dataset
-        
-        color = ['#ff0000','#00a650' ,'#959595','#00aeef','#ed008c','#f7977a','#fff799','#c6df9c','#81ca9d','#6ccff7','#f49bc1','#ee105a','#00a650' ,'#959595','#a763a9','#00aeef','#7b3000','#00a650' ,'#959595','#00aeef','#ed008c','#f7977a','#fff799','#c6df9c','#81ca9d','#6ccff7','#f49bc1','#ee105a','#00a650' ,'#959595','#a763a9','#00aeef','#7b3000']
-        new_assgin[:,2] = assign[:,1]
-        for x in range(len(color)):
-            for j in new_assgin:
-                if(j[2] == 98.0):
-                    plt.scatter(j[0],j[1],c='k')
-                elif(j[2] == x):
-                    plt.scatter(j[0],j[1],c=color[x])
-        plt.show()
-
-    '''
-    算法主入口
-    '''
-    def main_function(self,dataset,k):
-        start = datetime.datetime.now()
-        cluster = 0
-        assign = np.array([[0.0]*2 for i in range(len(dataset))])
-
-        assign[:] = dataset[:,[3,2]]
+        else:
+            print("\nInitializing for k = {0}".format(k))
+            k_rnn = initialize_rnn(X, k)
 
 
-        '''
-        初始化近邻索引表和逆向近邻索引表
-        '''
-        neb_index = self.neighbor_index(data,k)
+            asg = rnn_dbscan(X, k)
 
-        #print(neb_index)
-        end_neb = datetime.datetime.now()
-        #print(end_neb - start)
-        r_neb_index = self.r_neighbor_index(data,k,neb_index)
-        #print(r_neb_index)
-        end1 = datetime.datetime.now()
-        #print(end1 - start)
-        # #print(self.neighbors(data[2],neb_index,r_neb_index,k))
-        for x in dataset:
-            q = [j for j in assign if x[3] == j[0]]
-            if(q[0][1] == 99):
-                if(self.expand_cluster(x,dataset,assign,cluster,k,neb_index,r_neb_index)):
-                    cluster+=1
-                pass
-            pass
-        pass
+            ari = metrics.adjusted_rand_score(target, asg)
 
-        end = datetime.datetime.now()
-        #print(end - start)
-        # self.draw_pic(assign,dataset)
+            ARI.append(ari)
+            print("ARI_{0} = {1}".format(k, ari))
+            print("Number of clusters found: {0}".format(len(np.unique(asg))))
 
+            if (plots == True):
+                df_X = pd.DataFrame(X)
+                df_X['cluster'] = asg
+                sns.lmplot(x="0", y="1", data=df_X.rename(columns=lambda x: str(x)),
+                           hue='cluster', fit_reg=False, legend=False, markers=".")
+                plt.scatter(X[asg == -1, 1], X[asg == -1, 0], marker='+')
+                plt.title("k={0} | Number of clusters={1} | ARI: {2}".format(k, len(np.unique(asg)),ari))
+                plt.show()
 
+    res = pd.DataFrame({'k': k_range, 'ARI': ARI})
+    res.sort_values(by='ARI', ascending=False, inplace=True)
+    res.reset_index(inplace=True, drop=True)
+    print('\n######\nk values:\n')
+    print(res.head())
+    end = datetime.datetime.now()
 
+    # 得到时间
+    totalTime = (end - begin).total_seconds()
+    print("得到的时间")
+    print(totalTime)
 
-if __name__ == '__main__':
-    iris = datasets.load_iris()
-    data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
-
-    eps = 0.4
-    min_Pts = 9
-    k = 10
-
-    rdb = RnnDbcsan()
-    rdb.main_function(data, 10)
+#
+# df = pd.read_csv('iris.txt', header=None)
+# df.head()
+# k_range = [5]
+# run(df, k_range=k_range, plots=True)
+# ## Bank
 
 
+## D31
 
 
+df = pd.read_table('D31.txt',  header=None)
+df.head()
+k_range=[31]
 
-
-
-
-
-
+print('begin')
+run(df, k_range=k_range, plots=False)
 
