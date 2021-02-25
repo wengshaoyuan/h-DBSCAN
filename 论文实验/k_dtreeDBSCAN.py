@@ -1,37 +1,55 @@
-from sklearn import datasets
-import numpy as np
-import pandas as pd
 import random
-import matplotlib.pyplot as plt
-import time
+import numpy as np
 import copy
+import hnswlib
+import pandas as pd
 import datetime
-from sklearn.metrics import accuracy_score
-def find_neighbor(j, x, eps):
-    N = list()
-    for i in range(x.shape[0]):
-        temp = np.sqrt(np.sum(np.square(x[j] - x[i])))  # 计算欧式距离
-        if temp <= eps:
-            N.append(i)
+from sklearn.neighbors._kd_tree import KDTree
 
-    return set(N)
+
+def hnswlibTok(X,eps,min_Pts):                  #使用HNSW查找每个数据点的最近邻
+    # dim = len(X[0])
+    # data_lables=range(len(X))
+    # p = hnswlib.Index(space='l2', dim=dim)
+    # p.init_index(max_elements=len(X), ef_construction=200, M=20)
+    # p.add_items(X,data_lables)
+    # p.set_ef(50)
+    # labels,distance = p.knn_query(X, k=len(X))       #len(X)
+
+    tree = KDTree(X, leaf_size=50)
+    dist, labels = tree.query(X, k=len(X))
+
+    neighbor_list=[]
+    omega_list=[]       #核心对象集合
+    for i in labels:
+        centers=X[i[0]]
+        center_neighbor=i
+        dist_list=[]
+        for j in range(1,len(i)):
+            curr=X[i[j]]
+            dist = np.sqrt(np.sum(np.square(centers- curr)))
+            dist_list.append(dist)
+
+            if dist>eps:                                #找到小于半径的截至索引位置
+                center_neighbor=center_neighbor[0:j]
+                break
+        neighbor_list.append(set(center_neighbor))
+        if len(neighbor_list[-1]) >= min_Pts:
+            omega_list.append(i[0])  # 将样本加入核心对象集合
+    omega_list = set(omega_list)  # 转化为集合便于操作
+
+    return neighbor_list,omega_list
 
 
 def DBSCAN(X, eps, min_Pts):
-    k = -1
-    neighbor_list = []  # 用来保存每个数据的邻域
-    omega_list = []  # 核心对象集合
-    gama = set([x for x in range(len(X))])  # 初始时将所有点标记为未访问
+    k = -1          #初始化聚类簇数 k=-1
+
+    gama = set([x for x in range(len(X))])  # 初始化未访问样本集合：gama
+
     cluster = [-1 for _ in range(len(X))]  # 聚类
 
+    neighbor_list,omega_list=hnswlibTok(X,eps,min_Pts)
 
-    for i in range(len(X)):
-        neighbor_list.append(find_neighbor(i, X, eps))
-
-
-        if len(neighbor_list[-1]) >= min_Pts:
-            omega_list.append(i)  # 将样本加入核心对象集合
-    omega_list = set(omega_list)  # 转化为集合便于操作
 
     while len(omega_list) > 0:
         gama_old = copy.deepcopy(gama)
@@ -43,58 +61,18 @@ def DBSCAN(X, eps, min_Pts):
         while len(Q) > 0:
             q = Q[0]
             Q.remove(q)
-
-
             if len(neighbor_list[q]) >= min_Pts:
                 delta = neighbor_list[q] & gama
-
                 deltalist = list(delta)
                 for i in range(len(delta)):
                     Q.append(deltalist[i])
                     gama = gama - delta
         Ck = gama_old - gama
         Cklist = list(Ck)
-
-
         for i in range(len(Ck)):
             cluster[Cklist[i]] = k
         omega_list = omega_list - Ck
-
     return cluster
-
-def presion(y_true, y_pred):
-
-    class_label=list(set(y_true))
-
-    #将相同下标的元素发在一起。
-    label_index=[]
-    for i in class_label:
-        c=[]
-        for j in range(len(y_true)):
-            if y_true[j]==i:
-                c.append(j)
-        label_index.append(c)
-
-    # 查看是否正确分类
-    y_ture_lable=list(range(len(y_true)))
-    for i in label_index:
-        pred_label=[]
-        for j in i:
-            if y_pred[j]==-1:
-                continue
-            pred_label.append(y_pred[j])
-
-
-        if len(pred_label)==0:
-            max_label=len(class_label)+100
-        else:
-            max_label = max(pred_label, key=pred_label.count)
-        for s in i:
-            y_ture_lable[s]=max_label
-
-
-    acc=accuracy_score(y_ture_lable,y_pred)
-    return acc
 
 if __name__ == '__main__':
     # # 获取D31数据集
@@ -118,7 +96,8 @@ if __name__ == '__main__':
     #
     # eps = 0.01
     # min_Pts = 5
-    # # 获取HIGGS数据集
+    # 获取HIGGS数据集
+    # # HIGGS = pd.read_csv("data/HIGGS1000013D.csv")
     # HIGGS = pd.read_csv("data/HIGGS1800.csv")
     #
     # target = HIGGS['0'].values
@@ -131,7 +110,7 @@ if __name__ == '__main__':
     # eps = 0.1
     min_Pts = 20
     eps_list = [10, 15, 20, 25, 30]
-    # eps = 0.1
+
 
     for eps in eps_list:
         print(eps)
@@ -142,10 +121,9 @@ if __name__ == '__main__':
         # 得到时间
         totalTime = (end - begin).total_seconds()
         print(set(C))
-        print("原始Dbscan")
+        print("KDDbscan")
         print(totalTime)
 
         print("end")
         print('--------------------------------')
-
 

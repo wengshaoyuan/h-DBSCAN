@@ -4,10 +4,10 @@
 For performance reasons, a k-nn, k-rnn map will be constructed offline as an indexing table. 
 Nearest neighbors are found using scikit-learn's highly optimized KDTree implementation as a pure numpy implementation turned out to be very slow.
 """
-
+import datetime
 import warnings
 from numpy import random
-import datetime
+
 
 warnings.filterwarnings("ignore")
 import numpy as np
@@ -325,6 +325,7 @@ def rnn_dbscan(X, k):
             if expand_cluster(x, cluster, assign, k, i):
                 cluster += cluster
 
+    start = datetime.now()
     print("Expanding clusters ... ")
     expand_clusters(k, assign)
 
@@ -352,7 +353,7 @@ def pre_process(df):
     return X, target
 
 
-def run(df, k_range, plots=False):
+def run(df, k_range=range(2, 10), plots=False):
     global X, kdt, k_rnn
     X, target = pre_process(df)
 
@@ -373,7 +374,7 @@ def run(df, k_range, plots=False):
 
 
             asg = rnn_dbscan(X, k)
-
+            print(asg)
             ari = metrics.adjusted_rand_score(target, asg)
 
             ARI.append(ari)
@@ -398,7 +399,6 @@ def run(df, k_range, plots=False):
 
     # 得到时间
     totalTime = (end - begin).total_seconds()
-    print("得到的时间")
     print(totalTime)
 
 #

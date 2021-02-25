@@ -1,6 +1,6 @@
-
-import HNSWDBSCAN as HNSW_D
+import HNSWDBSCAN_FIN as hdbscan
 import DBsCAN as ORIdbscan
+import gdb_scan as gdbscan
 from sklearn.metrics import accuracy_score
 from collections import Counter
 import matplotlib.pyplot as plt
@@ -12,28 +12,7 @@ import datetime
 from sklearn.preprocessing import scale
 from sklearn.decomposition import PCA
 
-def getData():
-    # # 获取数据iris
-    # iris = datasets.load_iris()
-    # data = iris.data[:, :4]  # #表示我们只取特征空间中的4个维度
-    # target = iris.target
 
-    # # 获取D31数据集
-    # D31=pd.read_table("D31.txt", header=None)
-    # data=(D31[[0,1]]).values
-    # target=(D31[2]).values
-
-    # # 获取t4.8k数据集
-    # D31 = pd.read_csv("t4.8k.csv", header=None)
-    # data = (D31[[0, 1]]).values
-    # target = (D31[2]).values
-
-    # 获取788数据集
-    D31 = pd.read_csv("788points.csv", header=None)
-    data = (D31[[0, 1]]).values
-    target = list(range(len(D31)))
-
-    return data,target
 def presion(y_true, y_pred):
 
     class_label=list(set(y_true))
@@ -71,42 +50,61 @@ def presion(y_true, y_pred):
 
 
 if __name__ == '__main__':
-    # # iris 数据集
-    # data,target=getData()       #获取数据
-    # eps = 0.436
-    # min_Pts = 4
-
-    # # D31 数据集
-    # data, target = getData()  # 获取数据
+    # # 获取D31数据集
+    # D31=pd.read_table("D31.txt", header=None)
+    # data=(D31[[0,1]]).values
+    # target=(D31[2]).values
     # eps = 0.8
     # min_Pts = 30
 
-    # # t4.8k数据集
-    # data, target = getData()  # 获取数据
-    # eps = 8.5
-    # min_Pts = 15
+    # # 获取house数据集
+    # house=pd.read_csv("houser_processed_15000.csv")
+    # data=(house).values
+    #
+    # eps =10
+    # min_Pts = 20
 
+    # # 获取3D8M数据集
+    # D8M = pd.read_csv("data/3D0.4M.CSV")
+    # data = (D8M).values
+    #
+    # eps = 0.01
+    # min_Pts = 5
 
-    # 788 数据集
-    data, target = getData()  # 获取数据
-    eps =1.5
-    min_Pts = 6
+    # 获取HIGGS数据集
+    HIGGS = pd.read_csv("data/HIGGS1000013D.csv")
+    data = (HIGGS).values
 
+    eps = 0.1
+    min_Pts = 5
 
-    # 优化后的HNSW-DBSCAN
-
+    # 优化版HDBSCAN
     begin = datetime.datetime.now()
-
-    C = HNSW_D.DBSCAN(data, eps, min_Pts)
+    C = hdbscan.DBSCAN(data, eps, min_Pts)
     end = datetime.datetime.now()
+
+    print(set(C))
 
     # 得到时间
     totalTime = (end - begin).total_seconds()
+    print("hdbscan")
     print(totalTime)
-    pp = presion(target, C)
 
-    print(pp)
 
-    # 画图
-    plt.scatter(data[:, 0], data[:, 1], c=C)
-    plt.show()
+    # 获取HIGGS数据集
+    HIGGS = pd.read_csv("data/HIGGS1000013D.csv")
+    data = (HIGGS).values
+
+    eps = 0.1
+    min_Pts = 5
+    # 原始DBSCAN
+    begin = datetime.datetime.now()
+    C = ORIdbscan.DBSCAN(data, eps, min_Pts)
+    end = datetime.datetime.now()
+    # 得到时间
+    totalTime = (end - begin).total_seconds()
+    print(set(C))
+    print("原始dbscan")
+    print(totalTime)
+
+    print("end")

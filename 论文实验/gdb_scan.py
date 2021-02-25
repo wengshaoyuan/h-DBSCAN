@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score
 
-this_eps =8.5
+
 # min_pts = 20  # not used in this algorithm
 
 
@@ -92,7 +92,7 @@ def find_neighbours(p=Point, eps=float, g=Group):
 
 
 
-def gdb_scan(points,cluster):
+def gdb_scan(points,cluster,this_eps):
 
     for i in range(len(points)):
         points[i].assigned = True
@@ -181,41 +181,47 @@ def presion(y_true, y_pred):
     acc = accuracy_score(y_true, y_pred)
     return acc
 
-#
-#
-# if __name__ == '__main__':
-#
-#     # data=pd.read_csv("iris.txt",sep=",",header=None)
-#     # lable = (data[4]).values
-#     # data=(data[[0,1,2,3]]).values
-#     # data = pd.read_csv("788points.csv", header=None)
-#     data = pd.read_csv("t4.8k.csv", header=None)
-#     print(data)
-#
-#
-#     lable = (data[2]).values
-#     data=(data[[0,1]]).values
-#
-#     # data=data.values
-#
-#     data,cluster=getPoint(data)
-#     begin = datetime.datetime.now()
-#
-#     cluster=gdb_scan(data,cluster)
-#     end = datetime.datetime.now()
-#
-#     # 得到时间
-#     totalTime = (end - begin).total_seconds()
-#
-#     # score=presion(lable,cluster)
-#
-#     print("精确度")
-#     print(accuracy_score(lable, cluster))
-#
-#     print("总时间")
-#     print(totalTime)
-#
-#
-#
+
+if __name__ == '__main__':
+
+
+    # # 获取3D8M数据集
+    # D8M = pd.read_csv("data/3D0.4M.CSV")
+    # data = (D8M).values
+
+    # 获取HIGGS数据集
+    HIGGS = pd.read_csv("data/HIGGS1800.csv")
+
+    target = HIGGS['0'].values
+
+    HIGGS = HIGGS.drop(['0'], axis=1)
+    data = (HIGGS).values
+
+
+    # data=data.values
+
+    data,cluster=getPoint(data)
+
+    begin = datetime.datetime.now()
+    eps=4.8
+    cluster=gdb_scan(data,cluster,eps)
+    print(cluster)
+    print(eps)
+    end = datetime.datetime.now()
+
+    # 得到时间
+    totalTime = (end - begin).total_seconds()
+    print(set(cluster))
+
+    # score=presion(lable,cluster)
+
+    print("精确度")
+    print(accuracy_score(target, cluster))
+
+    print("总时间")
+    print(totalTime)
+
+
+
 
 
