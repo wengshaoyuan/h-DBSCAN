@@ -67,3 +67,54 @@ def DBSCAN(X, eps, min_Pts):
             cluster[Cklist[i]] = k
         omega_list = omega_list - Ck
     return cluster
+if __name__ == '__main__':
+    # # 获取D31数据集
+    # D31=pd.read_table("D31.txt", header=None)
+    # data=(D31[[0,1]]).values
+    # target=(D31[2]).values
+    # eps = 0.8
+    # min_Pts = 30
+
+    # # 获取house数据集
+    # house=pd.read_csv("houser_processed_15000.csv")
+    # data=(house).values
+    # print(data)
+    #
+    # eps =10
+    # min_Pts = 20
+
+    # # 获取3D8M数据集
+    # D8M = pd.read_csv("data/3D0.4M.CSV")
+    # data = (D8M).values
+    #
+    # eps = 0.01
+    # min_Pts = 5
+
+    # # 获取HIGGS数据集
+    # HIGGS = pd.read_csv("data/HIGGS1800.csv")
+    #
+    # target = HIGGS['0'].values
+    #
+    # HIGGS = HIGGS.drop(['0'], axis=1)
+    # data = (HIGGS).values
+
+    House=pd.read_csv("data/houser_processed_18000.csv")
+    data = (House).values
+
+    # eps = 0.1
+    min_Pts = 20
+    eps_list = [10, 15, 20, 25, 30]
+    for eps in eps_list:
+        print(eps)
+        # 原始DBSCAN
+        begin = datetime.datetime.now()
+        C = DBSCAN(data, eps, min_Pts)
+        end = datetime.datetime.now()
+        # 得到时间
+        totalTime = (end - begin).total_seconds()
+        print(set(C))
+        print("hDbscan")
+        print(totalTime)
+
+        print("end")
+        print('--------------------------------')
